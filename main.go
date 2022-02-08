@@ -7,8 +7,10 @@ import (
 	"os"
 )
 
-const clientID = "<your client id>"
-const clientSecret = "<your client secret>"
+
+const clientID = "<gitlab client id>"
+const clientSecret = "<gitlab client secret>"
+const gitlabServer = "<gitlab server url>"
 
 func main() {
 	fs := http.FileServer(http.Dir("public"))
@@ -22,14 +24,16 @@ func main() {
 		// First, we need to get the value of the `code` query param
 		err := r.ParseForm()
 		if err != nil {
-			fmt.Fprintf(os.Stdout, "could not parse query: %v", err)
+			fmt.Fprintf(os.Stdout, "could not parse query: %v\n", err)
 			w.WriteHeader(http.StatusBadRequest)
 		}
 		code := r.FormValue("code")
+        
+        fmt.Fprintf(os.Stdout, "code: %v\n", code)
 
 		// Next, lets for the HTTP request to call the github oauth enpoint
 		// to get our access token
-		reqURL := fmt.Sprintf("https://github.com/login/oauth/access_token?client_id=%s&client_secret=%s&code=%s", clientID, clientSecret, code)
+		reqURL := fmt.Sprintf("%s/oauth/token?client_id=%s&client_secret=%s&code=%s&grant_type=%s&redirect_uri=%s", gitlabServer, clientID, clientSecret, code, "authorization_code", "http://localhost:8080/oauth/redirect")
 		req, err := http.NewRequest(http.MethodPost, reqURL, nil)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "could not create HTTP request: %v", err)
@@ -46,13 +50,15 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		defer res.Body.Close()
-
+        
 		// Parse the request body into the `OAuthAccessResponse` struct
-		var t OAuthAccessResponse
+		var t OAuthAccessResponse        
 		if err := json.NewDecoder(res.Body).Decode(&t); err != nil {
 			fmt.Fprintf(os.Stdout, "could not parse JSON response: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 		}
+        
+        fmt.Fprintf(os.Stdout, "http response body parse succ! access_token: %s, token_type:%s, expires_in:%d, refresh_token:%s, created_at:%d\n", t.AccessToken, t.TokenType, t.ExpiresIn, t.RefreshToken, t.CreatedAt)
 
 		// Finally, send a response to redirect the user to the "welcome" page
 		// with the access token
@@ -65,4 +71,8 @@ func main() {
 
 type OAuthAccessResponse struct {
 	AccessToken string `json:"access_token"`
+    TokenType string `json:"token_type"`
+    ExpiresIn int `json:"expires_in"`
+    RefreshToken string `json:"refresh_token"`
+    CreatedAt int `json:"created_at`
 }
